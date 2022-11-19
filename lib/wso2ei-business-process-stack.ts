@@ -1,16 +1,115 @@
-import { Stack, StackProps } from 'aws-cdk-lib';
+import { Stack, StackProps, Duration } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-// import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as ecr from "aws-cdk-lib/aws-ecr";
+import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as ec2 from 'aws-cdk-lib/aws-ec2'
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2'
+import * as acm from "aws-cdk-lib/aws-certificatemanager";
+import { ApplicationProtocol } from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 
 export class Wso2EiBusinessProcessStack extends Stack {
-  constructor(scope: Construct, id: string, props?: StackProps) {
-    super(scope, id, props);
+    constructor(scope: Construct, id: string, props?: StackProps) {
+        super(scope, id, props);
 
-    // The code that defines your stack goes here
+        // VPC and LB
 
-    // example resource
-    // const queue = new sqs.Queue(this, 'Wso2EiBusinessProcessQueue', {
-    //   visibilityTimeout: cdk.Duration.seconds(300)
-    // });
-  }
+        const vpc = ec2.Vpc.fromLookup(this, 'VPC', {
+            vpcName: 'Blog',
+        });
+
+        // Cluster to deploy resources to
+        const cluster = new ecs.Cluster(this, "Cluster", {
+            vpc: vpc,
+            clusterName: "wso2ei-business-process",
+        });
+
+        const alb = new elbv2.ApplicationLoadBalancer(this, 'ALB', {
+            vpc: vpc,
+            internetFacing: true,
+            loadBalancerName: 'WSO2'
+        });
+
+        /* DNS, DOMAINS, CERTS */
+        // I'm using a domain I own: thabolebelo.com
+        const zone = route53.HostedZone.fromLookup(this, 'HostedZone', {
+            domainName: 'thabolebelo.com'
+        });
+
+        // const cert = new acm.Certificate(this, 'thabolebelo', {
+        //     domainName: 'wso2.thabolebelo.com',
+        //     subjectAlternativeNames: ['*.wso2.thabolebelo.com'],
+        //     validation: acm.CertificateValidation.fromDns(zone)
+        // });
+
+        // Create DNS record to point to the load balancer
+        new route53.ARecord(this, 'DNS', {
+            zone: zone,
+            target: route53.RecordTarget.fromAlias(
+                new route53Targets.LoadBalancerTarget(alb)
+            ),
+            ttl: Duration.seconds(300),
+            comment: 'URL to access the instance',
+            recordName: 'wso2'
+        });
+
+        // Docker repo for bps image
+        const repo = ecr.Repository.fromRepositoryArn(this, "Repo",
+            "arn:aws:ecr:us-east-1:737327749629:repository/wso2ei-business-process"
+        );
+        const image = ecs.ContainerImage.fromEcrRepository(repo, 'latest')
+
+        // Task definition
+        const task = new ecs.TaskDefinition(this, 'TaskDef', {
+            cpu: "512",
+            memoryMiB: "1024",
+            compatibility: ecs.Compatibility.EC2_AND_FARGATE,
+            networkMode: ecs.NetworkMode.AWS_VPC,
+        });
+
+         // The docker container including the image to use
+         const container = task.addContainer('Container', {
+            memoryLimitMiB: 1024,
+            image: image,
+            logging: ecs.LogDriver.awsLogs({ streamPrefix: "wso2" })
+        });
+
+        container.addPortMappings({
+            containerPort: 9445,
+            protocol: ecs.Protocol.TCP
+        });
+
+        container.addPortMappings({
+            containerPort: 9765,
+            protocol: ecs.Protocol.TCP
+        });
+
+        // create service
+        const service = new ecs.FargateService(this, "Service", {
+            cluster: cluster,
+            taskDefinition: task,
+            serviceName: 'WSO2',
+        });
+
+        /* CONFIGURE ALB DEFAULT LISTENERS */
+        // port 80 listener redirect to port 443
+        const port80Listener = alb.addListener('port80Listener', { 
+            port: 80,
+            open: true
+        });
+        
+        // add target group to container
+        port80Listener.addTargets('service', {
+            targetGroupName: 'WSO2',
+            port: 80,
+            targets: [service],
+            healthCheck: {
+                path: '/services/Version',
+                protocol: elbv2.Protocol.HTTPS,
+                unhealthyThresholdCount: 3
+            }
+        });
+
+    }
 }
