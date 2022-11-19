@@ -37,11 +37,11 @@ export class Wso2EiBusinessProcessStack extends Stack {
             domainName: 'thabolebelo.com'
         });
 
-        // const cert = new acm.Certificate(this, 'thabolebelo', {
-        //     domainName: 'wso2.thabolebelo.com',
-        //     subjectAlternativeNames: ['*.wso2.thabolebelo.com'],
-        //     validation: acm.CertificateValidation.fromDns(zone)
-        // });
+        const cert = new acm.Certificate(this, 'thabolebelo', {
+            domainName: 'wso2.thabolebelo.com',
+            subjectAlternativeNames: ['*.wso2.thabolebelo.com'],
+            validation: acm.CertificateValidation.fromDns(zone)
+        });
 
         // Create DNS record to point to the load balancer
         new route53.ARecord(this, 'DNS', {
@@ -93,17 +93,18 @@ export class Wso2EiBusinessProcessStack extends Stack {
         });
 
         /* CONFIGURE ALB DEFAULT LISTENERS */
-        // port 80 listener redirect to port 443
-        const port80Listener = alb.addListener('port80Listener', { 
-            port: 80,
-            open: true
+        const listener = alb.addListener('port9445Listener', { 
+            port: 9445,
+            certificates: [cert],
+            protocol: elbv2.ApplicationProtocol.HTTPS
         });
         
-        // add target group to container
-        port80Listener.addTargets('service', {
-            targetGroupName: 'WSO2',
-            port: 80,
+        // Add target group to container
+        listener.addTargets('service', {
+            port: 9445,
             targets: [service],
+            protocol: elbv2.ApplicationProtocol.HTTPS,
+            targetGroupName: 'WSO2',
             healthCheck: {
                 path: '/services/Version',
                 protocol: elbv2.Protocol.HTTPS,
