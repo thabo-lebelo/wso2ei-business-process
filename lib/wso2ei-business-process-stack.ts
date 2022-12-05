@@ -53,7 +53,7 @@ export class Wso2EiBusinessProcessStack extends Stack {
             "arn:aws:ecr:us-east-1:737327749629:repository/wso2ei-business-process"
         );
 
-        const image = ecs.ContainerImage.fromEcrRepository(repo, '6.4.0')
+        const image = ecs.ContainerImage.fromEcrRepository(repo, '6.3.0')
 
         const task = new ecs.TaskDefinition(this, 'Task', {
             cpu: "512",
