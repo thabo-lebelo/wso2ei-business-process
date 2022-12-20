@@ -56,8 +56,8 @@ export class Wso2EiBusinessProcessStack extends Stack {
         const image = ecs.ContainerImage.fromEcrRepository(repo, '6.3.0')
 
         const task = new ecs.TaskDefinition(this, 'Task', {
-            cpu: "512",
-            memoryMiB: "1024",
+            cpu: "1024",
+            memoryMiB: "2048",
             compatibility: ecs.Compatibility.EC2_AND_FARGATE,
             networkMode: ecs.NetworkMode.AWS_VPC,
         });
