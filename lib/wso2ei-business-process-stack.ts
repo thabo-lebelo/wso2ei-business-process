@@ -13,8 +13,8 @@ export class Wso2EiBusinessProcessStack extends Stack {
         super(scope, id, props);
 
         const vpc = ec2.Vpc.fromLookup(this, 'VPC', {
-            vpcName: 'Blog',
-        });
+			vpcName: 'wso2-vpc',
+		});
 
         const cluster = new ecs.Cluster(this, "Cluster", {
             vpc: vpc,
@@ -28,13 +28,13 @@ export class Wso2EiBusinessProcessStack extends Stack {
         });
 
         /* DNS, DOMAINS, CERTS */
-        // I'm using a domain I own: thabolebelo.com
+        // I'm using a domain I own: sovhubb.com
         const zone = route53.HostedZone.fromLookup(this, 'HostedZone', {
-            domainName: 'thabolebelo.com'
+            domainName: 'sovhubb.com'
         });
 
-        const cert = new acm.Certificate(this, 'thabolebelo', {
-            domainName: 'wso2-business-process.thabolebelo.com',
+        const cert = new acm.Certificate(this, 'Certificate', {
+            domainName: 'wso2-business-process.sovhubb.com',
             validation: acm.CertificateValidation.fromDns(zone)
         });
 
@@ -50,7 +50,7 @@ export class Wso2EiBusinessProcessStack extends Stack {
         });
 
         const repo = ecr.Repository.fromRepositoryArn(this, "Repo",
-            "arn:aws:ecr:us-east-1:737327749629:repository/wso2ei-business-process"
+            "arn:aws:ecr:af-south-1:858735049384:repository/wso2ei-bps"
         );
 
         const image = ecs.ContainerImage.fromEcrRepository(repo, '6.3.0')
